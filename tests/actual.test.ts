@@ -4,11 +4,17 @@ jest.mock("@actual-app/api", () => ({
   getAccounts: jest.fn(),
   getAccountBalance: jest.fn(),
   getCategories: jest.fn(),
+  getPayees: jest.fn(),
   addTransactions: jest.fn().mockResolvedValue([]),
 }));
 
 import * as api from "@actual-app/api";
-import { getAccountsSummary, getCategories, createTransaction } from "../src/actual";
+import {
+  getAccountsSummary,
+  getCategories,
+  createTransaction,
+  createTransfer,
+} from "../src/actual";
 
 const mockApi = api as jest.Mocked<typeof api>;
 
@@ -142,5 +148,56 @@ describe("createTransaction()", () => {
     expect(mockApi.addTransactions).toHaveBeenCalledWith("acc-2", [
       expect.objectContaining({ amount: 50000 }),
     ]);
+  });
+});
+
+describe("createTransfer()", () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  it("finds the transfer payee for the destination account and posts one transaction", async () => {
+    mockApi.getPayees.mockResolvedValue([
+      { id: "p1", name: "Transfer: Savings", transfer_acct: "acc-to" },
+    ] as never);
+
+    await createTransfer("acc-from", "acc-to", 100000);
+
+    expect(mockApi.addTransactions).toHaveBeenCalledTimes(1);
+    expect(mockApi.addTransactions).toHaveBeenCalledWith(
+      "acc-from",
+      [expect.objectContaining({ payee: "p1", amount: -100000 })],
+      { runTransfers: true },
+    );
+  });
+
+  it("uses negative amount on the source account", async () => {
+    mockApi.getPayees.mockResolvedValue([
+      { id: "p1", name: "Transfer: Savings", transfer_acct: "acc-to" },
+    ] as never);
+
+    await createTransfer("acc-from", "acc-to", 50000);
+
+    const [, transactions] = mockApi.addTransactions.mock.calls[0];
+    expect((transactions as Array<{ amount: number }>)[0].amount).toBe(-50000);
+  });
+
+  it("throws if no transfer payee found for destination account", async () => {
+    mockApi.getPayees.mockResolvedValue([
+      { id: "p1", name: "Food", transfer_acct: undefined },
+    ] as never);
+
+    await expect(createTransfer("acc-from", "acc-to", 1000)).rejects.toThrow(
+      "Transfer payee not found",
+    );
+  });
+
+  it("passes runTransfers=true to addTransactions", async () => {
+    mockApi.getPayees.mockResolvedValue([
+      { id: "p1", name: "Transfer: Savings", transfer_acct: "acc-to" },
+    ] as never);
+
+    await createTransfer("acc-from", "acc-to", 1000);
+
+    const [, , opts] = mockApi.addTransactions.mock.calls[0];
+    expect(opts).toEqual({ runTransfers: true });
   });
 });

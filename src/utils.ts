@@ -39,5 +39,5 @@ export function buildSummaryMessage(accounts: AccountSummary[]): string {
     }
   }
 
-  return lines.join("\n");
+  return `💰 <b>Account Summary</b>\n<tg-spoiler>${lines.join("\n")}</tg-spoiler>`;
 }

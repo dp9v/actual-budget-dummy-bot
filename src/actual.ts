@@ -48,6 +48,24 @@ export async function getCategories(): Promise<Category[]> {
   }));
 }
 
+export async function createTransfer(
+  fromAccountId: string,
+  toAccountId: string,
+  amountCents: number,
+): Promise<void> {
+  const payees = await api.getPayees();
+  const transferPayee = payees.find((p) => p.transfer_acct === toAccountId);
+  if (!transferPayee) {
+    throw new Error(`Transfer payee not found for account "${toAccountId}"`);
+  }
+  const today = new Date().toISOString().slice(0, 10);
+  await api.addTransactions(
+    fromAccountId,
+    [{ date: today, amount: -amountCents, payee: transferPayee.id }],
+    { runTransfers: true },
+  );
+}
+
 export async function createTransaction(
   accountId: string,
   amountCents: number,
@@ -62,3 +80,4 @@ export async function createTransaction(
     },
   ]);
 }
+

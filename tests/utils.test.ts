@@ -21,6 +21,26 @@ describe("formatBalance()", () => {
 });
 
 describe("buildSummaryMessage()", () => {
+  it("wraps account details in a spoiler tag", () => {
+    const accounts: AccountSummary[] = [
+      { id: "a1", name: "Checking", balance: 100, offbudget: false },
+    ];
+    const msg = buildSummaryMessage(accounts);
+    expect(msg).toContain("<tg-spoiler>");
+    expect(msg).toContain("</tg-spoiler>");
+  });
+
+  it("shows visible title outside the spoiler", () => {
+    const accounts: AccountSummary[] = [
+      { id: "a1", name: "Checking", balance: 100, offbudget: false },
+    ];
+    const msg = buildSummaryMessage(accounts);
+    const spoilerStart = msg.indexOf("<tg-spoiler>");
+    const titlePos = msg.indexOf("Account Summary");
+    expect(titlePos).toBeGreaterThanOrEqual(0);
+    expect(titlePos).toBeLessThan(spoilerStart);
+  });
+
   it("returns fallback for empty array", () => {
     expect(buildSummaryMessage([])).toBe("No accounts available.");
   });

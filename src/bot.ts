@@ -11,6 +11,7 @@ import {
   getAccountsSummary,
   getCategories,
   createTransaction,
+  createTransfer,
 } from "./actual.js";
 import type { AccountSummary, Category } from "./types.js";
 import { e, formatBalance, buildSummaryMessage } from "./utils.js";
@@ -153,7 +154,7 @@ async function newTransactionConversation(
   const convMsgId = toCtx.callbackQuery.message?.message_id!;
 
   await toCtx.editMessageText(
-    "➕ <b>New Transaction</b>\n\n<b>Step 3 of 3</b> — Enter amount:",
+    "➕ <b>New Transaction</b>\n\n<b>Step 3</b> — Enter amount:",
     {
       parse_mode: "HTML",
       reply_markup: new InlineKeyboard().text("❌ Cancel", "cancel_tx"),
@@ -202,14 +203,50 @@ async function newTransactionConversation(
     txAmount = parsed;
   }
 
-  // Step 4: Category
-  const categories = await conversation.external(() => getCategories());
+  const amountCents = Math.round(txAmount * 100);
+  const isTransfer = !!(txFrom && txTo);
 
+  // Transfer: skip category, create linked transfer transaction
+  if (isTransfer) {
+    try {
+      await conversation.external(() =>
+        createTransfer(txFrom!.id, txTo!.id, amountCents),
+      );
+    } catch (err) {
+      await ctx.api.editMessageText(
+        convChatId,
+        convMsgId,
+        `❌ Error creating transfer:\n<code>${e(String(err))}</code>`,
+        { parse_mode: "HTML", reply_markup: buildMainKeyboard() },
+      );
+      return;
+    }
+    await ctx.api.editMessageText(
+      convChatId,
+      convMsgId,
+      [
+        "✅ <b>Transfer added</b>",
+        "",
+        `  📤 From: ${e(txFrom!.name)}`,
+        `  📥 To: ${e(txTo!.name)}`,
+        `  💸 Amount: <code>${formatBalance(txAmount)}</code>`,
+      ].join("\n"),
+      { parse_mode: "HTML", reply_markup: buildMainKeyboard() },
+    );
+    return;
+  }
+
+  // Single account: show category step
   await ctx.api.editMessageText(
     convChatId,
     convMsgId,
-    "➕ <b>New Transaction</b>\n\nSelect <b>category</b>:",
-    { parse_mode: "HTML", reply_markup: buildCategoriesKeyboard(categories) },
+    "➕ <b>New Transaction</b>\n\n<b>Step 4</b> — Select <b>category</b>:",
+    {
+      parse_mode: "HTML",
+      reply_markup: buildCategoriesKeyboard(
+        await conversation.external(() => getCategories()),
+      ),
+    },
   );
 
   const catCtx = await conversation.waitFor("callback_query:data");
@@ -225,18 +262,14 @@ async function newTransactionConversation(
   }
 
   const categoryId = catData.startsWith("cat:") ? catData.slice(4) : undefined;
+  const categories = await conversation.external(() => getCategories());
   const categoryName = categoryId
     ? (categories.find((c) => c.id === categoryId)?.name ?? "Unknown")
     : "No category";
 
-  const amountCents = Math.round(txAmount * 100);
-
   try {
     await conversation.external(async () => {
-      if (txFrom && txTo) {
-        await createTransaction(txFrom.id, -amountCents, categoryId);
-        await createTransaction(txTo.id, amountCents);
-      } else if (txFrom) {
+      if (txFrom) {
         await createTransaction(txFrom.id, -amountCents, categoryId);
       } else {
         await createTransaction(txTo!.id, amountCents, categoryId);
