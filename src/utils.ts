@@ -20,24 +20,27 @@ export function buildSummaryMessage(accounts: AccountSummary[]): string {
   const budgetAccounts = accounts.filter((a) => !a.offbudget);
   const offbudgetAccounts = accounts.filter((a) => a.offbudget);
 
-  const lines: string[] = ["💰 <b>Budget accounts</b>"];
-  let budgetTotal = 0;
+  const parts: string[] = [];
   let idx = 1;
 
-  for (const acc of budgetAccounts) {
-    budgetTotal += acc.balance;
-    lines.push(`  ${idx++}. ${e(acc.name)}: <code>${formatBalance(acc.balance)}</code>`);
-  }
   if (budgetAccounts.length > 0) {
-    lines.push(`  ➡️ <b>Total:</b> <code>${formatBalance(budgetTotal)}</code>`);
+    let budgetTotal = 0;
+    const lines: string[] = [];
+    for (const acc of budgetAccounts) {
+      budgetTotal += acc.balance;
+      lines.push(`  ${idx++}. ${e(acc.name)}: ${formatBalance(acc.balance)}`);
+    }
+    lines.push(`  ➡️ Total: ${formatBalance(budgetTotal)}`);
+    parts.push(`💰 <b>Budget accounts</b>\n<tg-spoiler>${lines.join("\n")}</tg-spoiler>`);
   }
 
   if (offbudgetAccounts.length > 0) {
-    lines.push("", "🏦 <b>Off-budget accounts</b>");
+    const lines: string[] = [];
     for (const acc of offbudgetAccounts) {
-      lines.push(`  ${idx++}. ${e(acc.name)}: <code>${formatBalance(acc.balance)}</code>`);
+      lines.push(`  ${idx++}. ${e(acc.name)}: ${formatBalance(acc.balance)}`);
     }
+    parts.push(`🏦 <b>Off-budget accounts</b>\n<tg-spoiler>${lines.join("\n")}</tg-spoiler>`);
   }
 
-  return `💰 <b>Account Summary</b>\n<tg-spoiler>${lines.join("\n")}</tg-spoiler>`;
+  return parts.join("\n\n");
 }

@@ -36,7 +36,7 @@ describe("buildSummaryMessage()", () => {
     ];
     const msg = buildSummaryMessage(accounts);
     const spoilerStart = msg.indexOf("<tg-spoiler>");
-    const titlePos = msg.indexOf("Account Summary");
+    const titlePos = msg.indexOf("Budget accounts");
     expect(titlePos).toBeGreaterThanOrEqual(0);
     expect(titlePos).toBeLessThan(spoilerStart);
   });
@@ -74,6 +74,27 @@ describe("buildSummaryMessage()", () => {
     const msg = buildSummaryMessage(accounts);
     expect(msg).toContain("Off-budget accounts");
     expect(msg).toContain("Savings");
+  });
+
+  it("each section has its own spoiler", () => {
+    const accounts: AccountSummary[] = [
+      { id: "a1", name: "Budget", balance: 100, offbudget: false },
+      { id: "a2", name: "Savings", balance: 5000, offbudget: true },
+    ];
+    const msg = buildSummaryMessage(accounts);
+    const spoilerCount = (msg.match(/<tg-spoiler>/g) ?? []).length;
+    expect(spoilerCount).toBe(2);
+  });
+
+  it("off-budget title is outside its spoiler", () => {
+    const accounts: AccountSummary[] = [
+      { id: "a1", name: "Budget", balance: 100, offbudget: false },
+      { id: "a2", name: "Savings", balance: 5000, offbudget: true },
+    ];
+    const msg = buildSummaryMessage(accounts);
+    const offbudgetTitlePos = msg.indexOf("Off-budget accounts");
+    const secondSpoilerPos = msg.indexOf("<tg-spoiler>", msg.indexOf("</tg-spoiler>"));
+    expect(offbudgetTitlePos).toBeLessThan(secondSpoilerPos);
   });
 
   it("omits off-budget section when not applicable", () => {
