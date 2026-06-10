@@ -1,10 +1,14 @@
-FROM python:3.12-slim
+FROM node:22-alpine
 
 WORKDIR /app
 
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+COPY package*.json ./
+RUN npm ci --omit=dev
 
-COPY bot.py actual_client.py ./
+COPY tsconfig.json ./
+COPY src/ ./src/
+RUN npx tsc
 
-CMD ["python", "bot.py"]
+RUN mkdir -p /data
+
+CMD ["node", "dist/bot.js"]

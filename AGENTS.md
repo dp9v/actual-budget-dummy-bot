@@ -2,81 +2,91 @@
 
 This document describes the codebase for AI coding agents.
 
+## Agent Rules
+
+- **Do NOT automatically commit code.** After making changes, always stop and let the user review and commit manually.
+
 ## Project Overview
 
-A Telegram bot that connects to a self-hosted [Actual Budget](https://actualbudget.org/) server
-via the [actual-http-api](https://github.com/jhonderson/actual-http-api) REST wrapper.
+A Telegram bot that connects directly to a self-hosted [Actual Budget](https://actualbudget.org/) server
+via the official [`@actual-app/api`](https://www.npmjs.com/package/@actual-app/api) Node.js library.
 
 ## Tech Stack
 
 | Layer | Technology |
 |---|---|
-| Language | Python 3.12+ |
-| Telegram framework | `python-telegram-bot` v21 |
-| HTTP client | `httpx` (sync) |
-| Actual REST wrapper | `jhonderson/actual-http-api` Docker image |
+| Language | TypeScript (strict, target ES2022, CommonJS output) |
+| Telegram framework | `grammy` v1 + `@grammyjs/conversations` v2 |
+| Actual Budget client | `@actual-app/api` (direct connection, no HTTP wrapper) |
 | Containerization | Docker + Docker Compose |
+| Test framework | Jest + ts-jest |
 
 ## File Map
 
 | File | Purpose |
 |---|---|
-| `bot.py` | Entry point. All Telegram handlers, conversation state machine, message formatting |
-| `actual_client.py` | `ActualApiClient` class — wraps all calls to `actual-http-api` REST endpoints |
-| `requirements.txt` | Python dependencies |
-| `Dockerfile` | Bot container image |
-| `docker-compose.yml` | Orchestrates `actual-http-api` + `bot` containers |
+| `src/bot.ts` | Entry point. Grammy bot setup, all Telegram handlers, conversation flow |
+| `src/actual.ts` | Wrapper around `@actual-app/api` — init, accounts, categories, transactions |
+| `src/utils.ts` | Pure helper functions: `e()` (HTML escape), `formatBalance()`, `buildSummaryMessage()` |
+| `src/types.ts` | Shared TypeScript interfaces: `AccountSummary`, `Category` |
+| `tests/utils.test.ts` | Unit tests for formatting helpers |
+| `tests/actual.test.ts` | Unit tests for Actual Budget API wrapper (mocked) |
+| `tests/setup.ts` | Jest global setup — sets required env vars before module load |
+| `package.json` | Dependencies + Jest config |
+| `tsconfig.json` | Build tsconfig (`src/` → `dist/`) |
+| `tsconfig.test.json` | Test tsconfig — extends build config, includes `tests/` |
+| `Dockerfile` | Node.js 22 Alpine image; compiles TS then runs `dist/bot.js` |
+| `docker-compose.yml` | Single `bot` container with volume for Actual local cache |
 | `.env.example` | Template for required environment variables |
 
 ## Key Design Decisions
 
-- **HTML parse mode** — all Telegram messages use `ParseMode.HTML`. Dynamic values are escaped
+- **HTML parse mode** — all Telegram messages use `parse_mode: "HTML"`. Dynamic values are escaped
   with the `e()` helper (`&` → `&amp;`, etc.). Do NOT switch to MarkdownV2.
-- **Sync HTTP** — `actual_client.py` uses synchronous `httpx` calls. The bot runs them from async
-  handlers; this is acceptable because calls are short-lived and infrequent.
-- **Conversation state** — new-transaction flow uses `python-telegram-bot`'s `ConversationHandler`
-  with states `FROM_ACCOUNT → TO_ACCOUNT → AMOUNT → CATEGORY`.
+- **Grammy Conversations** — the new-transaction flow uses `@grammyjs/conversations` v2 with a
+  generator-based conversation function (`newTransactionConversation`).
 - **Single message UI** — the bot edits the same message throughout a conversation rather than
-  sending new ones. `conv_chat_id` / `conv_msg_id` stored in `context.user_data` track it.
-- **Access control** — `ALLOWED_CHAT_IDS` env var. Empty = allow all. Checked in `is_authorized()`.
-- **Amount encoding** — Actual Budget stores amounts as integer cents. The client multiplies/divides
-  by 100. Expenses are negative (`-amount_cents`), income is positive.
+  sending new ones. The conversation function holds the `chatId`/`messageId` in local variables.
+- **Access control** — `ALLOWED_CHAT_IDS` env var. Empty = allow all. Checked in `isAuthorized()`.
+- **Amount encoding** — Actual Budget stores amounts as integer cents. The wrapper divides by 100
+  for display. Expenses are negative (`-amountCents`), income is positive.
+- **@actual-app/api init** — `initActual()` must be called once at startup before any other API
+  calls. It calls `api.init()` then `api.downloadBudget()`.
 
-## actual-http-api Endpoints Used
+## @actual-app/api Methods Used
 
-| Method | Path | Used for |
-|---|---|---|
-| `GET` | `/v1/budgets/{id}/accounts` | List accounts |
-| `GET` | `/v1/budgets/{id}/accounts/{accountId}/balance` | Get account balance (returns integer cents) |
-| `GET` | `/v1/budgets/{id}/categories` | List categories |
-| `POST` | `/v1/budgets/{id}/accounts/{accountId}/transactions` | Create transaction |
-
-Authentication: `x-api-key` header.
+| Method | Used for |
+|---|---|
+| `init({ dataDir, serverURL, password })` | Connect to Actual server |
+| `downloadBudget(budgetId)` | Load the budget file |
+| `getAccounts()` | List all accounts |
+| `getAccountBalance(accountId)` | Get balance in cents |
+| `getCategories()` | List all categories |
+| `addTransactions(accountId, [tx])` | Create a transaction |
 
 ## Adding New Features
 
 ### New bot command
-1. Add a handler function `async def cmd_xxx(update, context)` in `bot.py`
-2. Register it: `app.add_handler(CommandHandler("xxx", cmd_xxx))`
+1. Add a handler `async (ctx: BotContext) => { ... }` in `src/bot.ts`
+2. Register it: `bot.command("xxx", handler)` or `bot.callbackQuery("xxx", handler)`
 
 ### New API call
-1. Add a method to `ActualApiClient` in `actual_client.py`
-2. Call it from the relevant handler in `bot.py`
+1. Add an exported `async function` to `src/actual.ts`
+2. Import and call it from `src/bot.ts`
 
 ### Extending the transaction flow
-- Add new states to the `range(4)` declaration and the `ConversationHandler.states` dict
-- Store intermediate values in `context.user_data`
+- Add new `await conversation.waitFor(...)` steps inside `newTransactionConversation` in `src/bot.ts`
+- Store intermediate values in local variables within the conversation function
 
 ## Environment Variables
 
-See `.env.example` for all variables and their descriptions.
-Required: `TELEGRAM_BOT_TOKEN`, `ACTUAL_SERVER_URL`, `ACTUAL_SERVER_PASSWORD`,
-`ACTUAL_BUDGET_ID`, `ACTUAL_API_KEY`.
+See `.env.example` for all variables.
+Required: `TELEGRAM_BOT_TOKEN`, `ACTUAL_SERVER_URL`, `ACTUAL_SERVER_PASSWORD`, `ACTUAL_BUDGET_ID`.
 
 ## Running Tests / Linting
 
-No automated tests are currently configured. Syntax can be verified with:
-
 ```bash
-python -m py_compile bot.py actual_client.py
+npm test              # run Jest tests
+npm run typecheck     # tsc --noEmit type check
+npm run build         # compile to dist/
 ```

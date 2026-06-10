@@ -1,30 +1,18 @@
 services:
-  actual-http-api:
-    image: jhonderson/actual-http-api:latest
-    restart: unless-stopped
-    ports:
-      - "5007:5007"
-    volumes:
-      - actual-http-api-data:/data
-    environment:
-      - ACTUAL_SERVER_URL=${ACTUAL_SERVER_URL}
-      - ACTUAL_SERVER_PASSWORD=${ACTUAL_SERVER_PASSWORD}
-      - API_KEY=${ACTUAL_API_KEY}
-      - NODE_ENV=production
-
   bot:
     build: .
     restart: unless-stopped
-    depends_on:
-      - actual-http-api
+    volumes:
+      - actual-data:/data
     environment:
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
-      - ACTUAL_API_URL=http://actual-http-api:5007
-      - ACTUAL_API_KEY=${ACTUAL_API_KEY}
+      - ACTUAL_SERVER_URL=${ACTUAL_SERVER_URL}
+      - ACTUAL_SERVER_PASSWORD=${ACTUAL_SERVER_PASSWORD}
       - ACTUAL_BUDGET_ID=${ACTUAL_BUDGET_ID}
       - ALLOWED_CHAT_IDS=${ALLOWED_CHAT_IDS:-}
+      - ACTUAL_DATA_DIR=/data
     env_file:
       - .env
 
 volumes:
-  actual-http-api-data:
+  actual-data:
