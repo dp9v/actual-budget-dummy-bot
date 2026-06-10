@@ -1,6 +1,6 @@
 # Actual Budget Telegram Bot
 
-A lightweight Telegram bot for interacting with your self-hosted [Actual Budget](https://actualbudget.org/) instance. Communicates with Actual via the [actual-http-api](https://github.com/jhonderson/actual-http-api) REST wrapper.
+A lightweight Telegram bot for interacting with your self-hosted [Actual Budget](https://actualbudget.org/) instance. Communicates with Actual directly via the official [`@actual-app/api`](https://www.npmjs.com/package/@actual-app/api) Node.js library.
 
 ## Features
 
@@ -12,10 +12,10 @@ A lightweight Telegram bot for interacting with your self-hosted [Actual Budget]
 ## Architecture
 
 ```
-Telegram ──► Bot (Python)  ──► actual-http-api  ──► Actual Budget Server
+Telegram ──► Bot (TypeScript)  ──► Actual Budget Server
 ```
 
-The bot and the REST API wrapper run as separate Docker containers managed by Docker Compose.
+The bot connects directly to your Actual Budget server — no extra API wrapper container needed.
 
 ## Prerequisites
 
@@ -28,8 +28,8 @@ The bot and the REST API wrapper run as separate Docker containers managed by Do
 ### 1. Clone the repository
 
 ```bash
-git clone https://github.com/dp9v/actual-budget-dummy-bot.git
-cd actual-budget-dummy-bot
+git clone https://github.com/dp9v/actual-budget-telegram-bot.git
+cd actual-budget-telegram-bot
 ```
 
 ### 2. Configure environment
@@ -56,7 +56,6 @@ That's it. The bot will start polling for messages immediately.
 | `ACTUAL_SERVER_URL` | ✅ | URL of your Actual Budget server, e.g. `http://actual:5006` |
 | `ACTUAL_SERVER_PASSWORD` | ✅ | Actual Budget web password |
 | `ACTUAL_BUDGET_ID` | ✅ | Budget Sync ID — found in Actual → Settings → Show advanced settings → Sync ID |
-| `ACTUAL_API_KEY` | ✅ | Secret key for `actual-http-api` — generate with `python -c "import secrets; print(secrets.token_hex(32))"` |
 | `ALLOWED_CHAT_IDS` | ❌ | Comma-separated Telegram chat IDs allowed to use the bot. Leave empty to allow everyone |
 
 ## Bot Commands
@@ -86,33 +85,33 @@ When creating a new transaction:
 ### Local setup
 
 ```bash
-python -m venv .venv
-source .venv/bin/activate   # Windows: .venv\Scripts\activate
-pip install -r requirements.txt
+npm install
 ```
 
 ### Run locally
 
-Start the REST API wrapper first:
-
 ```bash
-docker compose up actual-http-api -d
+# Set env vars in .env, then:
+npm run dev
 ```
 
-Then run the bot (PyCharm run config is included, or use the command line):
+### Build
 
 ```bash
-# Set env vars first, then:
-python bot.py
+npm run build
+npm start
 ```
 
 ### Project structure
 
 ```
 .
-├── bot.py              # Telegram bot — handlers, conversation flow, UI
-├── actual_client.py    # REST API client for actual-http-api
-├── requirements.txt
+├── src/
+│   ├── bot.ts          # Telegram bot — handlers, conversation flow, UI
+│   ├── actual.ts       # Actual Budget API client
+│   └── types.ts        # Shared TypeScript interfaces
+├── package.json
+├── tsconfig.json
 ├── Dockerfile
 ├── docker-compose.yml
 └── .env.example
