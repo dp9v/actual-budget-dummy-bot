@@ -1,6 +1,4 @@
-FROM node:22-alpine AS builder
-
-RUN apk add --no-cache python3 make g++
+FROM node:22-slim AS builder
 
 WORKDIR /app
 
@@ -12,7 +10,7 @@ RUN npx tsc
 RUN npm prune --omit=dev
 
 
-FROM node:22-alpine AS runner
+FROM node:22-slim AS runner
 
 WORKDIR /app
 
