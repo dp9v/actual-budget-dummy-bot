@@ -90,3 +90,16 @@ npm test              # run Jest tests
 npm run typecheck     # tsc --noEmit type check
 npm run build         # compile to dist/
 ```
+
+If Node.js is not available locally, use Docker via `docker-compose.dev.yml`:
+
+```bash
+# Run typecheck + tests (default command)
+docker compose -f docker-compose.dev.yml run --rm dev
+
+# Run a specific command
+docker compose -f docker-compose.dev.yml run --rm dev sh -c "npm ci && npm run typecheck"
+docker compose -f docker-compose.dev.yml run --rm dev sh -c "npm ci && npm run build"
+```
+
+`node_modules` are stored in a named Docker volume and reused across runs — no reinstall on every invocation.

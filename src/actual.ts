@@ -70,6 +70,7 @@ export async function createTransaction(
   accountId: string,
   amountCents: number,
   categoryId?: string,
+  notes?: string,
 ): Promise<void> {
   const today = new Date().toISOString().slice(0, 10);
   await api.addTransactions(accountId, [
@@ -77,6 +78,7 @@ export async function createTransaction(
       date: today,
       amount: amountCents,
       ...(categoryId ? { category: categoryId } : {}),
+      ...(notes ? { notes } : {}),
     },
   ]);
 }
