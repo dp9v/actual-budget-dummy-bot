@@ -267,16 +267,64 @@ async function newTransactionConversation(
     ? (categories.find((c) => c.id === categoryId)?.name ?? "Unknown")
     : "No category";
 
+  // Step 5: Note (optional)
+  await catCtx.editMessageText(
+    "➕ <b>New Transaction</b>\n\n<b>Step 5</b> — Enter a <b>note</b> (optional):",
+    {
+      parse_mode: "HTML",
+      reply_markup: new InlineKeyboard()
+        .text("⏭ Skip", "skip_note")
+        .text("❌ Cancel", "cancel_tx"),
+    },
+  );
+
+  let txNote: string | undefined;
+  while (true) {
+    const noteCtx = await conversation.waitFor([
+      "message:text",
+      "callback_query:data",
+    ]);
+
+    if ("callback_query" in noteCtx.update) {
+      await noteCtx.answerCallbackQuery();
+      const noteData = noteCtx.callbackQuery?.data;
+      if (noteData === "cancel_tx") {
+        await noteCtx.api.editMessageText(
+          convChatId,
+          convMsgId,
+          "❌ Transaction cancelled.",
+          { parse_mode: "HTML", reply_markup: buildMainKeyboard() },
+        );
+        return;
+      }
+      if (noteData === "skip_note") {
+        break;
+      }
+      continue;
+    }
+
+    const noteText = noteCtx.message?.text?.trim();
+    try {
+      await noteCtx.api.deleteMessage(convChatId, noteCtx.message!.message_id);
+    } catch {}
+    if (noteText) {
+      txNote = noteText;
+    }
+    break;
+  }
+
   try {
     await conversation.external(async () => {
       if (txFrom) {
-        await createTransaction(txFrom.id, -amountCents, categoryId);
+        await createTransaction(txFrom.id, -amountCents, categoryId, txNote);
       } else {
-        await createTransaction(txTo!.id, amountCents, categoryId);
+        await createTransaction(txTo!.id, amountCents, categoryId, txNote);
       }
     });
   } catch (err) {
-    await catCtx.editMessageText(
+    await ctx.api.editMessageText(
+      convChatId,
+      convMsgId,
       `❌ Error creating transaction:\n<code>${e(String(err))}</code>`,
       { parse_mode: "HTML", reply_markup: buildMainKeyboard() },
     );
@@ -285,15 +333,21 @@ async function newTransactionConversation(
 
   const fromName = txFrom?.name ?? "—";
   const toName = txTo?.name ?? "—";
-  await catCtx.editMessageText(
-    [
-      "✅ <b>Transaction added</b>",
-      "",
-      `  📤 From: ${e(fromName)}`,
-      `  📥 To: ${e(toName)}`,
-      `  💸 Amount: <code>${formatBalance(txAmount)}</code>`,
-      `  🏷 Category: ${e(categoryName)}`,
-    ].join("\n"),
+  const confirmLines = [
+    "✅ <b>Transaction added</b>",
+    "",
+    `  📤 From: ${e(fromName)}`,
+    `  📥 To: ${e(toName)}`,
+    `  💸 Amount: <code>${formatBalance(txAmount)}</code>`,
+    `  🏷 Category: ${e(categoryName)}`,
+  ];
+  if (txNote) {
+    confirmLines.push(`  📝 Note: ${e(txNote)}`);
+  }
+  await ctx.api.editMessageText(
+    convChatId,
+    convMsgId,
+    confirmLines.join("\n"),
     { parse_mode: "HTML", reply_markup: buildMainKeyboard() },
   );
 }
